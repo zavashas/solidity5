@@ -1,37 +1,6 @@
 abi = """
 [
 	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "_adId",
-				"type": "uint256"
-			}
-		],
-		"name": "buyEstate",
-		"outputs": [],
-		"stateMutability": "payable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "_estateId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_price",
-				"type": "uint256"
-			}
-		],
-		"name": "createAd",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -112,29 +81,6 @@ abi = """
 		"type": "event"
 	},
 	{
-		"inputs": [
-			{
-				"internalType": "string",
-				"name": "_addressEstate",
-				"type": "string"
-			},
-			{
-				"internalType": "uint256",
-				"name": "_square",
-				"type": "uint256"
-			},
-			{
-				"internalType": "enum EstateAgency.estateType",
-				"name": "_esType",
-				"type": "uint8"
-			}
-		],
-		"name": "createEstate",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -209,31 +155,6 @@ abi = """
 		"type": "event"
 	},
 	{
-		"inputs": [],
-		"name": "pay",
-		"outputs": [],
-		"stateMutability": "payable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "_adId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "enum EstateAgency.advertisementType",
-				"name": "_newAdType",
-				"type": "uint8"
-			}
-		],
-		"name": "updateAdType",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
 		"anonymous": false,
 		"inputs": [
 			{
@@ -299,37 +220,6 @@ abi = """
 		"inputs": [
 			{
 				"internalType": "uint256",
-				"name": "_estateId",
-				"type": "uint256"
-			},
-			{
-				"internalType": "bool",
-				"name": "_isActive",
-				"type": "bool"
-			}
-		],
-		"name": "updateEstateActive",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
-				"name": "_amount",
-				"type": "uint256"
-			}
-		],
-		"name": "withdraw",
-		"outputs": [],
-		"stateMutability": "nonpayable",
-		"type": "function"
-	},
-	{
-		"inputs": [
-			{
-				"internalType": "uint256",
 				"name": "",
 				"type": "uint256"
 			}
@@ -387,6 +277,60 @@ abi = """
 			}
 		],
 		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_adId",
+				"type": "uint256"
+			}
+		],
+		"name": "buyEstate",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_estateId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_price",
+				"type": "uint256"
+			}
+		],
+		"name": "createAd",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_addressEstate",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "_square",
+				"type": "uint256"
+			},
+			{
+				"internalType": "enum EstateAgency.estateType",
+				"name": "_esType",
+				"type": "uint8"
+			}
+		],
+		"name": "createEstate",
+		"outputs": [],
+		"stateMutability": "nonpayable",
 		"type": "function"
 	},
 	{
@@ -535,8 +479,64 @@ abi = """
 		],
 		"stateMutability": "view",
 		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "pay",
+		"outputs": [],
+		"stateMutability": "payable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_adId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "enum EstateAgency.advertisementType",
+				"name": "_newAdType",
+				"type": "uint8"
+			}
+		],
+		"name": "updateAdType",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_estateId",
+				"type": "uint256"
+			},
+			{
+				"internalType": "bool",
+				"name": "_isActive",
+				"type": "bool"
+			}
+		],
+		"name": "updateEstateActive",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "uint256",
+				"name": "_amount",
+				"type": "uint256"
+			}
+		],
+		"name": "withdraw",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
 	}
 ]
 """
 
-contract_address = "0x473221B2C485536fAd9B980D3ba5331Ebb01433F" 
+contract_address = "0xe0Eac66950Bd020D98e0F0E9FE00FEb9B220cc30" 
