@@ -539,4 +539,4 @@ abi = """
 ]
 """
 
-contract_address = "0xe0Eac66950Bd020D98e0F0E9FE00FEb9B220cc30" 
+contract_address = "0xc800B8134B8081165a086D0c7e2FDa30B317773f" 

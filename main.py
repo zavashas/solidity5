@@ -1,201 +1,292 @@
-from web3 import Web3
+from flask import Flask, request, render_template, redirect, url_for, flash, session
 import re
-from web3.middleware import geth_poa_middleware
+from web3 import Web3, HTTPProvider
 from contract_info import abi, contract_address
+from web3.middleware import geth_poa_middleware
 
-w3 = Web3(Web3.HTTPProvider('http://127.0.0.1:8545'))
+app = Flask(__name__)
+app.secret_key = 'your_secret_key'  
+
+w3 = Web3(HTTPProvider('http://127.0.0.1:8545'))
+
 w3.middleware_onion.inject(geth_poa_middleware, layer=0)
-
 contract = w3.eth.contract(address=contract_address, abi=abi)
 
-def validate_password(password):
+def is_strong_password(password):
     if len(password) < 12:
-        return False, "Пароль должен быть не менее 12 символов"
-    if not re.search("[a-z]", password):
-        return False, "Пароль должен содержать хотя бы одну строчную букву"
-    if not re.search("[A-Z]", password):
-        return False, "Пароль должен содержать хотя бы одну прописную букву"
-    if not re.search("[0-9]", password):
-        return False, "Пароль должен содержать хотя бы одну цифру"
-    if not re.search("[!@#$%^&*(),.?\":{}|<>]", password):
-        return False, "Пароль должен содержать хотя бы один специальный символ"
-    if re.fullmatch(r"(password123|qwerty123)", password):
-        return False, "Избегайте простых и общеизвестных паролей"
-    return True, ""
+        return False
+    if not re.search(r'[A-Z]', password):
+        return False
+    if not re.search(r'[a-z]', password):
+        return False
+    if not re.search(r'[0-9]', password):
+        return False
+    if not re.search(r'[!@#$%^&*()-+=]', password):
+        return False
+    return True
 
-def register():
-    password = input("Введите пароль: ")
-    valid, message = validate_password(password)
-    if not valid:
-        print(message)
-        return
+def get_estates_info():
     try:
-        account = w3.geth.personal.new_account(password)
-        print(f"Публичный ключ: {account}")
+        estates = contract.functions.getEstates().call()
+        return estates
     except Exception as e:
-        print(f"Ошибка регистрации: {e}")
+        flash(f"Ошибка получения информации о недвижимостях: {e}", 'danger')
+        return []
 
+def get_ads_info():
+    try:
+        ads = contract.functions.getAds().call()
+        return ads
+    except Exception as e:
+        flash(f"Ошибка получения информации о текущих объявлениях: {e}", 'danger')
+        return []
+
+def get_balances(account, balance_type):
+    try:
+        if balance_type == 'account':
+            account_balance = w3.eth.get_balance(account)
+            account_balance_eth = w3.from_wei(account_balance, 'ether')
+            return account_balance_eth
+        elif balance_type == 'contract':
+            contract_balance = contract.functions.getBalance().call({'from': account})
+            contract_balance_eth = w3.from_wei(contract_balance, 'ether')  
+            return contract_balance_eth
+        else:
+            return None, None, "Неверно указан тип баланса"
+    except Exception as e:
+        return None, None, f"Ошибка получения балансов: {e}"
+
+@app.route('/')
+def index():
+    return render_template('login.html')
+
+@app.route('/login', methods=['POST'])
 def login():
-    public_key = input("Введите ключ: ")
-    password = input("Введите пароль: ")
     try:
-        w3.geth.personal.unlock_account(public_key, password, 300)
-        print("Авторизация прошла успешно")
-        return public_key
+        public_key = request.form['public_key']
+        password = request.form['password']
+        w3.geth.personal.unlock_account(public_key, password)
+        session['public_key'] = public_key
+        return redirect(url_for('dashboard'))
     except Exception as e:
-        print(f"Ошибка авторизации: {e}")
-        return None
+        flash(f'Ошибка авторизации: {e}', 'danger')
+        return redirect(url_for('index'))
 
-def create_estate(account):
-    address_estate = input("Введите адрес недвижимости: ")
-    square = int(input("Введите площадь в квадратных метрах: "))
-    if square <= 2:
-        print("Площадь недвижимости должна быть больше 2 кв.м")
-        return
-    es_type = int(input("Введите тип недвижимости (0-House, 1-Flat, 2-Loft, 3-Dacha): "))
+@app.route('/register', methods=['POST'])
+def register():
     try:
-        tx_hash = contract.functions.createEstate(address_estate, square, es_type).transact({'from': account})
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        print(f"Транзакция создания недвижимости подтверждена: {receipt.transactionHash.hex()}")
+        password = request.form['password']
+        if not is_strong_password(password):
+            flash('Пароль слишком слабый. Убедитесь, что он содержит как минимум 12 символов, включая заглавные и строчные буквы, цифры и специальные символы.', 'danger')
+            return redirect(url_for('index'))
+        account = w3.geth.personal.new_account(password)
+        flash(f'Успешная регистрация. Ваш публичный ключ: {account}', 'success')
+        return redirect(url_for('index'))
     except Exception as e:
-        print(f"Ошибка создания недвижимости: {e}")
+        flash(f'Ошибка регистрации: {e}', 'danger')
+        return redirect(url_for('index'))
 
-def change_estate_status(account):
-    estate_id = int(input("Введите ID недвижимости: "))
-    is_active = input("Активна недвижимость? (да/нет): ").lower() == 'да'
-    try:
-        tx_hash = contract.functions.updateEstateActive(estate_id, is_active).transact({'from': account})
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        print(f"Транзакция изменения статуса недвижимости подтверждена: {receipt.transactionHash.hex()}")
-    except Exception as e:
-        print(f"Ошибка изменения статуса недвижимости: {e}")
+@app.route('/dashboard')
+def dashboard():
+    if 'public_key' not in session:
+        return redirect(url_for('index'))
+    public_key = session['public_key']
+    return render_template('index.html', public_key=public_key)
 
-def create_advertisement(account):
-    estate_id = int(input("Введите ID недвижимости для объявления: "))
-    price = float(input("Введите цену в эфирах: "))
-    if price <= 0:
-        print("Цена должна быть больше нуля")
-        return
-    try:
-        tx_hash = contract.functions.createAd(estate_id, price).transact({'from': account})
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        print(f"Транзакция создания объявления подтверждена: {receipt.transactionHash.hex()}")
-    except Exception as e:
-        print(f"Ошибка создания объявления: {e}")
+@app.route('/logout')
+def logout():
+    session.pop('public_key', None)
+    return redirect(url_for('index'))
 
-def change_ad_status(account):
-    ad_id = int(input("Введите ID объявления: "))
-    new_status = int(input("Введите новый статус объявления (0-Opened, 1-Closed): "))
-    try:
-        tx_hash = contract.functions.updateAdType(ad_id, new_status).transact({'from': account})
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        print(f"Транзакция изменения статуса объявления подтверждена: {receipt.transactionHash.hex()}")
-    except Exception as e:
-        print(f"Ошибка изменения статуса объявления: {e}")
+@app.route('/account_balance')
+def account_balance():
+    if 'public_key' not in session:
+        return redirect(url_for('index'))
+    public_key = session['public_key']
+    balance = get_balances(public_key, 'account')
+    return render_template('balance.html', public_key=public_key, balance=balance, balance_type='account')
 
-def buy_estate(account):
-    ad_id = int(input("Введите ID объявления для покупки: "))
-    try:
-        tx_hash = contract.functions.buyEstate(ad_id).transact({'from': account, 'value': w3.toWei(1, 'ether')})
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        print(f"Транзакция покупки недвижимости подтверждена: {receipt.transactionHash.hex()}")
-    except Exception as e:
-        if "insufficient funds" in str(e):
-            print("Недостаточно средств для покупки")
-        else:
-            print(f"Ошибка покупки недвижимости: {e}")
+@app.route('/contract_balance')
+def contract_balance():
+    if 'public_key' not in session:
+        return redirect(url_for('index'))
+    public_key = session['public_key']
+    balance = get_balances(public_key, 'contract')
+    return render_template('balance.html', public_key=public_key, balance=balance, balance_type='contract')
 
-def withdraw_funds(account):
-    amount = float(input("Введите сумму для вывода в эфирах: "))
-    if amount <= 0:
-        print("Сумма должна быть больше нуля")
-        return
-    try:
-        tx_hash = contract.functions.withdraw(w3.toWei(amount, 'ether')).transact({'from': account})
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash)
-        print(f"Транзакция вывода средств подтверждена: {receipt.transactionHash.hex()}")
-    except Exception as e:
-        if "no funds to withdraw" in str(e):
-            print("Нет средств для вывода")
-        else:
-            print(f"Ошибка вывода средств: {e}")
-            
-def get_balance_on_contract(account):
-    try:
-        balance = contract.functions.getBalance().call({'from': account})
-        print(f"Ваш баланс на смарт-контракте: {balance} wei")
-    except Exception as e:
-        print(f"Ошибка получения информации о балансе: {e}")
+@app.route('/estates_info')
+def estates_info():
+    estates = get_estates_info()
+    return render_template('estates_info.html', estates=estates)
 
-def get_estates(account):
-    try:
-        estates = contract.functions.getEstates().call({'from': account})
-        if not estates:
-            print("Нет доступных недвижимостей.")
-        else:
-            for estate in estates:
-                print(f"ID: {estate['estateId']}, Адрес: {estate['addressEstate']}, Площадь: {estate['square']} кв.м, Тип: {estate['esType']}, Владелец: {estate['owner']}, Активна: {'Да' if estate['isActive'] else 'Нет'}")
-    except Exception as e:
-        print(f"Ошибка получения списка недвижимостей: {e}")
+@app.route('/ads_info')
+def ads_info():
+    ads = get_ads_info()
+    return render_template('ads_info.html', ads=ads)
 
-def get_ads(account):
-    try:
-        ads = contract.functions.getAds().call({'from': account})
-        if not ads:
-            print("Нет доступных объявлений.")
-        else:
-            for ad in ads:
-                print(f"ID объявления: {ad['adId']}, Цена: {ad['price']} wei, ID недвижимости: {ad['estateId']}, Владелец: {ad['owner']}, Покупатель: {ad['buyer']}, Статус: {'Открыто' if ad['adType'] == 0 else 'Закрыто'}")
-    except Exception as e:
-        print(f"Ошибка получения списка объявлений: {e}")
+@app.route('/send_eth', methods=['GET', 'POST'])
+def send_eth():
+    if 'public_key' not in session:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        public_key = session['public_key']
+        try:
+            amount = float(request.form['amount'])
+
+            amount_wei = int(amount * 1000000000000000000) 
+
+            tx_hash = contract.functions.pay().transact({
+                'from': public_key,
+                'value': amount_wei 
+            })
+            flash(f'Транзакция {tx_hash.hex()} отправлена', 'success')
+            return redirect(url_for('dashboard'))
+        except ValueError:
+            flash('Ошибка: неверное значение', 'danger')
+        except Exception as e:
+            flash(f'Ошибка отправки эфира: {e}', 'danger')
+    return render_template('send_eth.html')
 
 
-def main():
-    account = ""
-    is_auth = False
-    while True:
-        if not is_auth:
-            choice = input("Введите:\n1. Авторизация\n2. Регистрация\n3. Выход\n")
-            if choice == "1":
-                account = login()
-                if account:
-                    is_auth = True
-            elif choice == "2":
-                register()
-            elif choice == "3":
-                break
-            else:
-                print("Введите 1, 2 или 3")
-        else:
-            choice = input("Введите:\n1. Создать недвижимость\n2. Изменить статус недвижимости\n3. Создать объявление\n4. Изменить статус объявления\n5. Купить недвижимость\n6. Посмотреть информацию\n7. Посмотреть баланс аккаунта\n8. Вывести средства\n9. Выйти из аккаунта\n")
-            if choice == "1":
-                create_estate(account)
-            elif choice == "2":
-                change_estate_status(account)
-            elif choice == "3":
-                create_advertisement(account)
-            elif choice == "4":
-                change_ad_status(account)
-            elif choice == "5":
-                buy_estate(account)
-            elif choice == "6":
-                sub_choice = input("Введите:\n1. Посмотреть баланс на смарт-контракте\n2. Посмотреть доступные недвижимости\n3. Посмотреть текущие объявления\n")
-                if sub_choice == "1":
-                    get_balance_on_contract(account)
-                elif sub_choice == "2":
-                    get_estates(account)
-                elif sub_choice == "3":
-                    get_ads(account)
-                else:
-                    print("Введите число от 1 до 3")
-            elif choice == "7":
-                print(f"Баланс аккаунта: {w3.eth.get_balance(account)}")
-            elif choice == "8":
-                withdraw_funds(account)
-            elif choice == "9":
-                is_auth = False
-            else:
-                print("Введите число от 1 до 9")
+@app.route('/withdraw', methods=['GET', 'POST'])
+def withdraw():
+    if 'public_key' not in session:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        public_key = session['public_key']
+        try:
+            amount = float(request.form['amount'])
 
-if __name__ == "__main__":
-    main()
+            tx_hash = contract.functions.withdraw(amount).transact({
+                'from': public_key,
+            })
+            flash(f"Транзакция {tx_hash.hex()} отправлена", 'success')
+            return redirect(url_for('dashboard'))
+        except ValueError:
+            flash('Ошибка: неверное значение', 'danger')
+        except Exception as e:
+            flash(f'Ошибка снятия средств: {e}', 'danger')
+    return render_template('withdraw.html')
+
+
+@app.route('/create_estate', methods=['GET', 'POST'])
+def create_estate():
+    if 'public_key' not in session:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        public_key = session['public_key']
+        try:
+            size = int(request.form['size'])
+            address = request.form['address']
+            es_type = int(request.form['es_type'])
+            tx_hash = contract.functions.createEstate(address, size, es_type).transact({
+                'from': public_key
+            })
+            flash(f"Транзакция {tx_hash.hex()} отправлена для создания недвижимости", 'success')
+            return redirect(url_for('dashboard'))
+        except ValueError:
+            flash('Ошибка: неверное значение', 'danger')
+        except Exception as e:
+            flash(f'Ошибка создания недвижимости: {e}', 'danger')
+    return render_template('create_estate.html')
+
+
+@app.route('/create_ad', methods=['GET', 'POST'])
+def create_ad():
+    if 'public_key' not in session:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        public_key = session['public_key']
+        try:
+            id_estate = int(request.form['id_estate'])
+            price_eth = float(request.form['price'])
+            price_wei = int(price_eth)
+            tx_hash = contract.functions.createAd(id_estate, price_wei).transact({
+                'from': public_key
+            })
+            flash(f"Транзакция {tx_hash.hex()} отправлена для создания объявления", 'success')
+            return redirect(url_for('dashboard'))
+        except ValueError:
+            flash('Ошибка: неверное значение', 'danger')
+        except Exception as e:
+            flash(f'Ошибка создания объявления: {e}', 'danger')
+    return render_template('create_ad.html')
+
+@app.route('/buy_estate', methods=['GET', 'POST'])
+def buy_estate():
+    if 'public_key' not in session:
+        return redirect(url_for('index'))
+    public_key = session['public_key']
+    
+    ads = contract.functions.getAds().call({'from': public_key})
+
+    if request.method == 'POST':
+        try:
+            id_ad = int(request.form['id_ad'])
+            ad = next((ad for ad in ads if ad[1] == id_ad), None)
+            if ad is None:
+                flash("Объявление с таким ID не найдено.")
+                return redirect(url_for('buy_estate'))
+
+            price_in_wei = ad[0]  
+            balance = w3.eth.get_balance(public_key)
+            if balance < price_in_wei:
+                flash("Недостаточно средств для покупки")
+                return redirect(url_for('buy_estate'))
+
+            price_in_wei = int(price_in_wei)  
+
+            tx_hash = contract.functions.buyEstate(id_ad).transact({'from': public_key, 'value': price_in_wei})
+            flash(f"Транзакция {tx_hash.hex()} отправлена для покупки недвижимости", 'success')
+            return redirect(url_for('dashboard'))
+        except ValueError:
+            flash('Ошибка: неверное значение', 'danger')
+            return redirect(url_for('buy_estate'))
+        except Exception as e:
+            flash(f'Ошибка покупки недвижимости: {e}', 'danger')
+            return redirect(url_for('buy_estate')) 
+    
+    return render_template('buy_estate.html', ads=ads)
+
+@app.route('/update_status', methods=['GET', 'POST'])
+def update_status():
+    if 'public_key' not in session:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        public_key = session['public_key']
+        try:
+            id_estate = int(request.form['id_estate'])
+            new_status = int(request.form['new_status'])
+            tx_hash = contract.functions.updateEstateActive(id_estate, bool(new_status)).transact({
+                'from': public_key
+            })
+            flash(f"Transaction {tx_hash.hex()} sent to update estate status", 'success')
+            return redirect(url_for('dashboard'))
+        except ValueError:
+            flash('Error: invalid input', 'danger')
+        except Exception as e:
+            flash(f'Error updating estate status: {e}', 'danger')
+    return render_template('update_status.html')
+
+@app.route('/update_ad_status', methods=['GET', 'POST'])
+def update_ad_status():
+    if 'public_key' not in session:
+        return redirect(url_for('index'))
+    if request.method == 'POST':
+        public_key = session['public_key']
+        try:
+            id_ad = int(request.form['id_ad'])
+            new_status = int(request.form['new_status'])
+            tx_hash = contract.functions.updateAdType(id_ad, new_status).transact({
+                'from': public_key
+            })
+            flash(f"Transaction {tx_hash.hex()} sent to update advertisement status", 'success')
+            return redirect(url_for('dashboard'))
+        except ValueError:
+            flash('Error: invalid input', 'danger')
+        except Exception as e:
+            flash(f'Error updating advertisement status: {e}', 'danger')
+    return render_template('update_ad_status.html')
+
+if __name__ == '__main__':
+    app.run(debug=True)
